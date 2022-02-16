@@ -27,18 +27,34 @@ namespace Google.Cloud.Spanner.NHibernate.Samples.Snippets
         public static async Task Run(SampleConfiguration configuration)
         {
             using var session = configuration.SessionFactory.OpenSession();
-            var cmd = session.Connection.CreateCommand();
+            var insertCmd = session.Connection.CreateCommand();
 
-            cmd.CommandText =
+            insertCmd.CommandText =
                 @"INSERT INTO Singers (Id, LastName, FirstName, BirthDate, Version, CreatedAt) VALUES
                 ('121', 'Garcia', 'Melissa', '1980-11-11', 1, '2020-11-11'),
                 ('131', 'Morales', 'Russell', '1980-11-11', 1, '2020-11-11' ),
                 ('141', 'Long', 'Jacqueline', '1980-11-11', 1, '2020-11-11' ),
                 ('151', 'Shaw', 'Dylan', '1980-11-11', 1, '2020-11-11')";
             
-            var insertedRowsCount = (long)await cmd.ExecuteNonQueryAsync();
+            var insertedRowsCount = (long)await insertCmd.ExecuteNonQueryAsync();
 
             Console.WriteLine($"{insertedRowsCount} rows inserted");
+
+            var updateCmd = session.Connection.CreateCommand();
+
+            updateCmd.CommandText =
+                @"UPDATE Singers SET FirstName= 'Melisa', BirthDate= '1980-11-13', Version= 2, CreatedAt = '2020-11-11' WHERE LastName= 'Garcia'";
+
+            var updatedRowsCount = (long)await updateCmd.ExecuteNonQueryAsync();
+            Console.WriteLine($"{updatedRowsCount} rows updated");
+
+            var deleteCmd = session.Connection.CreateCommand();
+
+            deleteCmd.CommandText =
+                @"DELETE FROM Singers WHERE Id IN ('121', '131', '141', '151')";
+
+            var deletedRowsCount = (long)await deleteCmd.ExecuteNonQueryAsync();
+            Console.WriteLine($"{deletedRowsCount} rows deleted");
         }
     }
 }
