@@ -2,12 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Google.Api.Gax;
-using Google.Cloud.Spanner.Admin.Database.V1;
-using Google.Cloud.Spanner.Common.V1;
 using Google.Cloud.Spanner.NHibernate.Samples.SampleModel;
 using NHibernate;
 using NHibernate.Multi;
+using NHibernate.Type;
 
 namespace Google.Cloud.Spanner.NHibernate.Samples.Snippets
 {
@@ -15,19 +13,83 @@ namespace Google.Cloud.Spanner.NHibernate.Samples.Snippets
     {
         public static async Task Run(SampleConfiguration configuration)
         {
+            //Preparing samples
+            await Setup(configuration);
+
             using var session = configuration.SessionFactory.OpenSession();
 
-            string[] ids = { "131", "141", "151", "161", "171" };
-            var queries = session.CreateQueryBatch()
-                .Add<Singer>(
-                    session.CreateQuery("from Singers s where s.Id in :Ids")
-                        .SetParameterList("Ids", ids)
-                        .SetFirstResult(3))
-                .Add<long>(
-                    session.CreateQuery("select count(*) from Singers s where s.Id in :Ids")
-                        .SetParameterList("Ids", ids));
-            queries.Execute();
+            var firstNames = new List<string> { "Alice", "Peter", "Bobby", "Tom" };
 
+            //First query - get singers from FirstName list
+            var singersQuery = session
+                .CreateSQLQuery("SELECT * FROM Singers WHERE FirstName IN UNNEST(:id)")
+                .AddEntity(typeof(Singer))
+                .SetParameter("id", new SpannerStringArray(firstNames));
+
+            //Second query - get total singers count
+            var totalSingersQuery = session
+                .CreateSQLQuery("SELECT COUNT(*) as cnt FROM Singers")
+                .AddScalar("cnt", new Int64Type());
+
+            //Setting a batch query
+            var queries = session.CreateQueryBatch()
+                .Add<Singer>(singersQuery.SetFirstResult(3))
+                .Add<long>(totalSingersQuery);
+
+            //Execute
+            Console.WriteLine("Executing batch query");
+            await queries.ExecuteAsync(default);
+
+            //Get singers
+            var singers = await queries.GetResultAsync<Singer>(0, default);
+            Console.WriteLine("Here are the selected singers:");
+            foreach (var singer in singers)
+            {
+                Console.WriteLine($"\tId: {singer.Id}");
+            }
+            //Get singers count
+            var totalSingers = (await queries.GetResultAsync<long>(1, default)).FirstOrDefault();
+            Console.WriteLine($"Total rows count in table Singers - {totalSingers}");
+        }
+
+        private static async Task Setup(SampleConfiguration configuration)
+        {
+            using var session = configuration.SessionFactory.OpenSession();
+            await session.SaveAsync(new Singer
+            {
+                FirstName = "Alice",
+                LastName = "Henderson",
+                BirthDate = new SpannerDate(1983, 10, 19),
+            });
+            await session.FlushAsync();
+            await session.SaveAsync(new Singer
+            {
+                FirstName = "Peter",
+                LastName = "Allison",
+                BirthDate = new SpannerDate(2000, 5, 2),
+            });
+            await session.FlushAsync();
+            await session.SaveAsync(new Singer
+            {
+                FirstName = "Mike",
+                LastName = "Nicholson",
+                BirthDate = new SpannerDate(1976, 8, 31),
+            });
+            await session.FlushAsync();
+            await session.SaveAsync(new Singer
+            {
+                FirstName = "Tom",
+                LastName = "Hamilton",
+                BirthDate = new SpannerDate(1966, 3, 11),
+            });
+            await session.FlushAsync();
+            await session.SaveAsync(new Singer
+            {
+                FirstName = "Bobby",
+                LastName = "Ferry",
+                BirthDate = new SpannerDate(1986, 9, 24),
+            });
+            await session.FlushAsync();
         }
     }
 }
